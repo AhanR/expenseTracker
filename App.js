@@ -2,9 +2,11 @@ import { useState, useEffect, useReducer } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, ScrollView, Pressable, SafeAreaView, TextInput } from 'react-native';
 import * as FileSystem from 'expo-file-system'
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function App() {
 
+  const storageKey = "expenseAppItems";
   const [items, setItems] = useState(0);
   const [editor, setEditor] = useState({ open: false, key: 0 });
   const [expenses, setExpenses] = useReducer((state, action) => {
@@ -37,6 +39,10 @@ export default function App() {
         return state;
       }
     }
+    else if(action.action == 4) {
+      //saving retreived data to state
+      return action.data;
+    }
 
     return state;
   }, []);
@@ -47,28 +53,33 @@ export default function App() {
     return null;
   }
 
-  useEffect(() => {
-    FileSystem.writeAsStringAsync(expenses)
-    console.log("written to cache");
+  //store data on files
+  async function saveFile () {
+    console.log("attempting save file");
+    try {
+      await AsyncStorage.setItem(storageKey, JSON.stringify(expenses));
+      console.log("items stored");
+    }
+    catch (e) {
+      console.log(e);
+    }
+  }
+
+  useEffect(async () => {
+    await saveFile();
   }, [expenses])
 
-  const cacheDir = FileSystem.cacheDirectory+"AppState";
-  FileSystem.getInfoAsync(cacheDir).then(fileInfo => {
-    if(fileInfo.exists) {
-      FileSystem.readAsStringAsync(cacheDir).then(data => {
-        console.log(data.data);
-      })
+  //import data on files
+  useEffect(async () => {
+    console.log("getting the stored data");
+    const savedExpenses = await AsyncStorage.getItem(storageKey)
+    console.log(savedExpenses);
+    if(savedExpenses != null) {
+      console.log("setting saved values")
+      setExpenses({action : 4, data : JSON.parse(savedExpenses)});
     }
-  });
-
-  function saveFile() {
-    let state = expenses.reduce((p,a)=> {
-      return p + "\n" + JSON.stringify(a)
-    },"")
-    console.log(state);
-    FileSystem.writeAsStringAsync(state)
-    console.log("written to cache");
-  }
+  }, [])
+  
 
   return (
     <SafeAreaView
@@ -291,7 +302,8 @@ const Popup = (props) => {
             title="done"
             style={[styles.doneButton, styles.primary]}
             onPress={() => {
-              props.opener({ open: false, key: localKey })
+              props.opener({ open: false, key: localKey });
+              props.saveFile();
             }}
           />
         </View>
@@ -354,7 +366,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     backgroundColor: '#505050',
     borderRadius: 10,
-    // fontFamily : 'Inter-Black',
   },
   doneButton: {
     padding: 10,
